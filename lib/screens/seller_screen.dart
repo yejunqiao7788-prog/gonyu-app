@@ -118,7 +118,10 @@ class _SellerScreenState extends State<SellerScreen> {
         ),
       );
     }
-    return CustomScrollView(
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final columnWidth = (constraints.maxWidth - 24 - 8) / 2;
+        return CustomScrollView(
       controller: _scroll,
       slivers: [
         SliverToBoxAdapter(
@@ -143,13 +146,16 @@ class _SellerScreenState extends State<SellerScreen> {
         // 店铺页 items 是纯卡片：没有 is_promoted 可标——那一格不是平台卖出去的格子，
         // 标了就是虚假披露（§12.4）。
         SliverPadding(
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          sliver: SliverList(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          sliver: SliverGrid(
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              mainAxisSpacing: 8,
+              crossAxisSpacing: 8,
+              mainAxisExtent: gridMainAxisExtent(columnWidth),
+            ),
             delegate: SliverChildBuilderDelegate(
-              (context, i) => Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: ProductCard(card: items[i], source: 'seller', view: 'seller|$widgetSlug|$inStockOnly', position: i, pageNumber: 1),
-              ),
+              (context, i) => ProductCard(card: items[i], source: 'seller', view: 'seller|$widgetSlug|$inStockOnly', position: i, pageNumber: 1),
               childCount: items.length,
             ),
           ),
@@ -157,6 +163,8 @@ class _SellerScreenState extends State<SellerScreen> {
         if (loadingMore) const SliverToBoxAdapter(child: Padding(padding: EdgeInsets.all(16), child: Center(child: CircularProgressIndicator()))),
         const SliverToBoxAdapter(child: SizedBox(height: 24)),
       ],
+        );
+      },
     );
   }
 

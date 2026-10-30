@@ -9,7 +9,10 @@ import '../state/products_controller.dart';
 /// truncated 为真时格子数字是下界，要能说「至少 N」；读不到窗口就整块不渲染——
 /// 宁可不画日历，也不能退化成全表扫。
 class ListedCalendarStrip extends StatelessWidget {
-  const ListedCalendarStrip({super.key});
+  const ListedCalendarStrip({super.key, this.embedded = false});
+
+  /// embedded=true 时用于筛选面板内：不占首页行高，字号一致。
+  final bool embedded;
 
   @override
   Widget build(BuildContext context) {

@@ -9,10 +9,13 @@ import '../data/models.dart';
 import '../screens/product_detail_screen.dart';
 import '../state/app_state.dart';
 
-/// 商品卡（移动端横向封面档，参照 Web 的 <sm 档：封面 118px、卖家说明隐藏）。
-/// - 曝光判据是「40% 可见一次」，不许改成「渲染即曝光」（§8.9）。
-/// - null 不折 0：sku/lead_time/rating 的 null 各有画法（§6.2）。
-/// - 推广标注只画出参给的 is_promoted，绝不自己按 pool 推断（§6.2、§9.5）。
+/// 商品卡：微信小店式双列大图卡（业主 2026-10-31 决定，替代文档 §8.8 的单列档）。
+/// 图占卡的绝对主角，文字只剩「标题两行 + 红价 + 一行灰字」；
+/// 但服务端契约的渲染纪律一条不动：
+/// - null 不折 0：sku/rating/lead_time 的 null 各有画法（§6.2）。
+/// - 推广标注只画出参给的 is_promoted，显式排序不摘标（§6.2、§9.5）。
+/// - /N 的分母是 image_count；无图是一档诚实的形态，必须有占位（§8.5）。
+/// - 曝光判据是「40% 可见一次」，不许改成渲染即曝光（§8.9）。
 class ProductCard extends StatefulWidget {
   const ProductCard({
     super.key,
@@ -26,11 +29,11 @@ class ProductCard extends StatefulWidget {
   });
 
   final MarketCard card;
-  final String source; // home|search|category|seller|related|detail
-  final String view; // 客户端去重键（q|category|sort|page），不是持久判别字段
+  final String source;
+  final String view;
   final int position;
   final int pageNumber;
-  final bool disabled; // 收藏里已下架的行：不可点的卡片，不是指向 404 的链接
+  final bool disabled;
   final VoidCallback? onDisabledTap;
 
   @override
@@ -53,22 +56,16 @@ class _ProductCardState extends State<ProductCard> {
       return;
     }
     final app = context.read<AppState>();
-    // 点击事件先入队并立即冲刷：App 里导航不销毁进程，但页面会被回收，规则照抄（§8.9）。
     app.analytics.track(AnalyticsBinding.cardClick(widget.card, source: widget.source, position: widget.position, page: widget.pageNumber, view: widget.view));
-    unawaitedFlush(app);
-    await Navigator.of(context).push(MaterialPageRoute(
-      builder: (_) => ProductDetailScreen(slug: widget.card.slug),
-    ));
-  }
-
-  void unawaitedFlush(AppState app) {
     app.analytics.flush();
+    await Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => ProductDetailScreen(slug: widget.card.slug, fromSource: widget.source),
+    ));
   }
 
   @override
   Widget build(BuildContext context) {
     final app = context.watch<AppState>();
-    final l = app.l10n;
     final c = widget.card;
 
     return VisibilityDetector(
@@ -79,56 +76,67 @@ class _ProductCardState extends State<ProductCard> {
       },
       child: Material(
         color: MarketTokens.surface,
-        borderRadius: BorderRadius.circular(MarketTokens.radius),
+        borderRadius: BorderRadius.circular(12),
         child: InkWell(
-          borderRadius: BorderRadius.circular(MarketTokens.radius),
+          borderRadius: BorderRadius.circular(12),
           onTap: () => _open(context),
           child: Container(
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(MarketTokens.radius),
-              border: Border.all(color: MarketTokens.line),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: MarketTokens.line.withValues(alpha: 0.7)),
             ),
-            padding: const EdgeInsets.all(10),
-            child: Row(
+            clipBehavior: Clip.antiAlias,
+            child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 _Cover(card: c),
-                const SizedBox(width: 10),
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          if (c.isPromoted) ...[
-                            _PromoBadge(label: l.raw('promoted_badge')),
-                            const SizedBox(width: 6),
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(8, 7, 8, 6),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // 标题两行为限；推广披露在图上，不在这里。
+                        Text(c.title, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13, height: 1.25, fontWeight: FontWeight.w600, color: MarketTokens.ink)),
+                        const Spacer(),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Expanded(
+                              child: Text(formatPrice(c.priceUkr, c.currencySymbol), maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 16.5, fontWeight: FontWeight.w800, color: MarketTokens.primary, height: 1.1)),
+                            ),
+                            // rating null 不打一颗空星（§6.2）；有值才出现。
+                            if (c.rating != null)
+                              Padding(
+                                padding: const EdgeInsets.only(left: 4, bottom: 1),
+                                child: Text('★${c.rating!.toStringAsFixed(1)}', style: const TextStyle(fontSize: 11, color: MarketTokens.muted)),
+                              ),
                           ],
-                          Expanded(
-                            child: Text(c.title, maxLines: 2, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w700)),
-                          ),
-                          _FavoriteButton(slug: c.slug),
-                        ],
-                      ),
-                      const SizedBox(height: 4),
-                      Text(c.sellerName, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.bodySmall?.apply(color: MarketTokens.muted)),
-                      const SizedBox(height: 4),
-                      Text(formatPrice(c.priceUkr, c.currencySymbol), style: Theme.of(context).textTheme.titleMedium?.copyWith(color: MarketTokens.primary, fontWeight: FontWeight.w800)),
-                      const SizedBox(height: 4),
-                      // 次级元信息行：≤390px 允许截断的是这一行，不是主价格与主 CTA（§9.6）。
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 2,
-                        children: [
-                          Text(c.inStock ? l.raw('in_stock') : l.raw('out_of_stock'), style: Theme.of(context).textTheme.bodySmall?.apply(color: c.inStock ? MarketTokens.success : MarketTokens.muted)),
-                          // sku 为 null：这一格整行不出现，不打印空串
-                          if (c.sku != null) Text(c.sku!, style: Theme.of(context).textTheme.bodySmall?.apply(color: MarketTokens.muted)),
-                          // lead_time 为 null 时首页卡片留空（详情页才允许「未标注」）
-                          if (c.leadTimeDays != null) Text(l.fill('lead_time', {'n': c.leadTimeDays})),
-                          if (c.rating != null) Text('★ ${c.rating!.toStringAsFixed(1)}'), // null 不打成 0 分
-                        ],
-                      ),
-                    ],
+                        ),
+                        const SizedBox(height: 3),
+                        // 一行灰字：卖家为主，次要元信息（起订/无货）跟在后面，窄屏截的是这一行（§9.6）。
+                        Row(
+                          children: [
+                            if (!c.inStock) ...[
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                                decoration: BoxDecoration(border: Border.all(color: MarketTokens.muted), borderRadius: BorderRadius.circular(3)),
+                                child: Text(app.l10n.raw('out_of_stock'), style: const TextStyle(fontSize: 10, color: MarketTokens.muted)),
+                              ),
+                              const SizedBox(width: 4),
+                            ],
+                            Expanded(
+                              child: Text(
+                                c.sellerName,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(fontSize: 11.5, color: MarketTokens.muted),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ],
@@ -146,53 +154,48 @@ class _Cover extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const size = 118.0;
+    final app = context.read<AppState>();
     final url = card.imageUrl;
-    if (url == null || card.imageCount == 0) {
-      // 「无图卡片」是设计里存在的一档（§8.5），必须有占位样式。
-      return Container(
-        width: size,
-        height: size,
-        decoration: BoxDecoration(color: MarketTokens.surfaceDim, borderRadius: BorderRadius.circular(10)),
-        child: const Icon(Icons.image_outlined, color: MarketTokens.muted),
-      );
-    }
-    return SizedBox(
-      width: size,
-      height: size,
-      child: Stack(
-        children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(10),
-            child: CachedNetworkImage(imageUrl: url, fit: BoxFit.cover, width: size, height: size, errorWidget: (_, __, ___) => Container(color: MarketTokens.surfaceDim)),
-          ),
-          if (card.imageCount > 1)
-            // /N 的分母是 image_count（服务端给的数），不是数组长度（§8.5）。
-            Positioned(
-              right: 6,
-              bottom: 6,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(8)),
-                child: Text('/${card.imageCount}', style: const TextStyle(color: Colors.white, fontSize: 11)),
+    return AspectRatio(
+      aspectRatio: 1.0,
+      child: Container(
+        color: MarketTokens.surfaceDim,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            if (url != null && card.imageCount > 0)
+              CachedNetworkImage(imageUrl: url, fit: BoxFit.cover, errorWidget: (_, __, ___) => const Center(child: Icon(Icons.image_outlined, color: MarketTokens.muted)))
+            else
+              const Center(child: Icon(Icons.image_outlined, size: 30, color: MarketTokens.muted)),
+            if (card.isPromoted)
+              Positioned(
+                left: 6,
+                top: 6,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                  decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.45), borderRadius: BorderRadius.circular(4)),
+                  child: Text(app.l10n.raw('promoted_badge'), style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w600)),
+                ),
               ),
+            // 收藏浮标：小号、半透明圆底，不抢图。
+            Positioned(
+              right: 4,
+              top: 4,
+              child: _FavoriteButton(slug: card.slug),
             ),
-        ],
+            if (card.imageCount > 1)
+              Positioned(
+                right: 6,
+                bottom: 6,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                  decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.45), borderRadius: BorderRadius.circular(8)),
+                  child: Text('/${card.imageCount}', style: const TextStyle(color: Colors.white, fontSize: 10)),
+                ),
+              ),
+          ],
+        ),
       ),
-    );
-  }
-}
-
-class _PromoBadge extends StatelessWidget {
-  const _PromoBadge({required this.label});
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      decoration: BoxDecoration(color: const Color(0xFFFFF1DE), borderRadius: BorderRadius.circular(6), border: Border.all(color: MarketTokens.promo.withValues(alpha: 0.4))),
-      child: Text(label, style: const TextStyle(fontSize: 11, color: MarketTokens.promo, fontWeight: FontWeight.w700)),
     );
   }
 }
@@ -205,22 +208,30 @@ class _FavoriteButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final app = context.read<AppState>();
     return Selector<AppState, bool>(
-      shouldRebuild: (a, b) => a != b,
       selector: (_, s) => s.isFavorite(slug),
       builder: (context, favorited, __) {
-        return IconButton(
-          visualDensity: VisualDensity.compact,
-          padding: EdgeInsets.zero,
-          constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-          icon: Icon(favorited ? Icons.favorite : Icons.favorite_border, color: favorited ? MarketTokens.primary : MarketTokens.muted),
-          onPressed: () async {
+        return InkWell(
+          borderRadius: BorderRadius.circular(20),
+          onTap: () async {
             final message = await app.toggleFavorite(slug);
             if (message != null && context.mounted) {
               ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
             }
           },
+          child: Padding(
+            padding: const EdgeInsets.all(6),
+            child: Container(
+              width: 28,
+              height: 28,
+              decoration: BoxDecoration(color: Colors.black.withValues(alpha: favorited ? 0.35 : 0.25), shape: BoxShape.circle),
+              child: Icon(favorited ? Icons.favorite : Icons.favorite_border, size: 16, color: favorited ? MarketTokens.primary : Colors.white),
+            ),
+          ),
         );
       },
     );
   }
 }
+
+/// 双列网格的纵高：封面 1:1 + 文字区 84。宽度由调用方 LayoutBuilder 给出。
+double gridMainAxisExtent(double crossColumnWidth) => crossColumnWidth + 84;

@@ -122,7 +122,7 @@ class _MeScreenState extends State<MeScreen> with SingleTickerProviderStateMixin
         Expanded(
           child: TabBarView(
             controller: _tabs,
-            children: [_Pager<BuyerLeadRow>(loader: (p, s) => _app.buyerAuthApi.listLeads(lang: _app.lang, page: p, pageSize: s), build: _leadTile), _Pager<BuyerConversationRow>(loader: (p, s) => _app.buyerAuthApi.listConversations(page: p, pageSize: s), build: _threadTile), _Pager<BuyerFavoriteRow>(loader: (p, s) => _app.buyerAuthApi.listFavorites(lang: _app.lang, page: p, pageSize: s), build: _favoriteTile)],
+            children: [_Pager<BuyerLeadRow>(loader: (p, s) => _app.buyerAuthApi.listLeads(lang: _app.lang, page: p, pageSize: s), build: _leadTile), _Pager<BuyerConversationRow>(loader: (p, s) => _app.buyerAuthApi.listConversations(page: p, pageSize: s), build: _threadTile), _Pager<BuyerFavoriteRow>(loader: (p, s) => _app.buyerAuthApi.listFavorites(lang: _app.lang, page: p, pageSize: s), build: _favoriteTile, gridCrossAxis: 2)],
           ),
         ),
       ],
@@ -236,27 +236,25 @@ class _MeScreenState extends State<MeScreen> with SingleTickerProviderStateMixin
 
   Widget _favoriteTile(BuildContext context, BuyerFavoriteRow row) {
     // listing_visible=false ⇒ 渲染这一行但不给链接：它是买家自己的记录，不能从列表里删掉（§6.8）。
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-      child: ProductCard(
-        card: row.card,
-        source: 'home',
-        view: 'favorites',
-        position: 0,
-        pageNumber: 1,
-        disabled: !row.listingVisible,
-        onDisabledTap: () => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(_app.l10n.raw('listing_unavailable_short')))),
-      ),
+    return ProductCard(
+      card: row.card,
+      source: 'home',
+      view: 'favorites',
+      position: 0,
+      pageNumber: 1,
+      disabled: !row.listingVisible,
+      onDisabledTap: () => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(_app.l10n.raw('listing_unavailable_short')))),
     );
   }
 }
 
 /// 个人页三块共用的分页列表：{items,page,page_size,total} 各读各的、total 是自洽的（§10.7）。
 class _Pager<T> extends StatefulWidget {
-  const _Pager({required this.loader, required this.build});
+  const _Pager({required this.loader, required this.build, this.gridCrossAxis = 1});
 
   final Future<BuyerPage<T>> Function(int page, int pageSize) loader;
   final Widget Function(BuildContext context, T row) build;
+  final int gridCrossAxis;
 
   @override
   State<_Pager<T>> createState() => _PagerState<T>();
@@ -312,6 +310,29 @@ class _PagerState<T> extends State<_Pager<T>> {
     }
     if (rows.isEmpty) {
       return Center(child: Text(context.read<AppState>().l10n.raw('empty_hint'), style: Theme.of(context).textTheme.bodyMedium?.apply(color: MarketTokens.muted)));
+    }
+    if (widget.gridCrossAxis > 1) {
+      return LayoutBuilder(
+        builder: (context, constraints) {
+          final columnWidth = (constraints.maxWidth - 24 - (widget.gridCrossAxis - 1) * 8) / widget.gridCrossAxis;
+          return GridView.builder(
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: widget.gridCrossAxis,
+              mainAxisSpacing: 8,
+              crossAxisSpacing: 8,
+              mainAxisExtent: gridMainAxisExtent(columnWidth),
+            ),
+            itemCount: rows.length + (rows.length < total ? 1 : 0),
+            itemBuilder: (context, i) {
+              if (i >= rows.length) {
+                return Center(child: TextButton(onPressed: () => _load(more: true), child: Text(context.read<AppState>().l10n.raw('loading'))));
+              }
+              return widget.build(context, rows[i]);
+            },
+          );
+        },
+      );
     }
     return ListView(
       children: [

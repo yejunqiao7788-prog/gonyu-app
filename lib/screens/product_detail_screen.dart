@@ -191,11 +191,24 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                 const SizedBox(height: 20),
                 Text(_app.l10n.raw('detail_related'), style: Theme.of(context).textTheme.titleSmall),
                 const SizedBox(height: 8),
-                for (final r in d.related)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 10),
-                    child: ProductCard(card: r, source: 'related', view: 'related|${d.card.slug}', position: d.related.indexOf(r), pageNumber: 1),
-                  ),
+                // 相关推荐也用双列卡：整 App 的商品语言只有一个形状。
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final columnWidth = (constraints.maxWidth - 8) / 2;
+                    return GridView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 2,
+                        mainAxisSpacing: 8,
+                        crossAxisSpacing: 8,
+                        mainAxisExtent: gridMainAxisExtent(columnWidth),
+                      ),
+                      itemCount: d.related.length,
+                      itemBuilder: (_, i) => ProductCard(card: d.related[i], source: 'related', view: 'related|${d.card.slug}', position: i, pageNumber: 1),
+                    );
+                  },
+                ),
               ],
             ],
           ),

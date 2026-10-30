@@ -13,6 +13,8 @@ import '../core/lang_store.dart';
 import '../data/buyer_auth_api.dart';
 import '../data/market_api.dart';
 import '../data/models.dart';
+import 'catalog_controller.dart';
+import 'products_controller.dart';
 
 /// 会话状态四态而不是「空」（§6.8）：读失败永远不印成「没有记录」。
 enum MeStatus { anon, ok, unknown, invalid, expired, suspended }
@@ -50,6 +52,9 @@ class AppState extends ChangeNotifier {
       analytics: analytics,
       lang: lang,
     );
+    // 列表与类目状态提升到全局：首页、底部分类弹层、店铺入口读同一份真值。
+    state.catalog = CatalogController(state);
+    state.products = ProductsController(state);
     await state._restoreWishlist();
     await state._restoreMe();
     return state;
@@ -71,23 +76,36 @@ class AppState extends ChangeNotifier {
   final BuyerAuthApi buyerAuthApi;
   final Analytics analytics;
 
+  late final CatalogController catalog;
+  late final ProductsController products;
+
   String _lang;
   String get lang => _lang;
   MarketL10n get l10n => MarketL10n(_lang);
 
+  /// 语言变了：类目树、列表、日历分面都要按新 lang 重读——集中一处，不留第二份真值。
   Future<void> setLang(String value) async {
+    if (value == _lang) return;
     await langStore.choose(value);
     _lang = await langStore.resolve();
     analytics.lang = _lang;
     notifyListeners();
+    catalog.reloadForLang();
+    products.refresh();
+    products.loadFacet();
   }
 
   /// 深链/分享链接带 ?lang= 时走这条（不写偏好，只影响本会话，§8.6）。
   Future<void> applyDeepLinkLang(String? value) async {
     if (value == null) return;
-    _lang = await langStore.resolve(deeplinkLang: value);
+    final next = await langStore.resolve(deeplinkLang: value);
+    if (next == _lang) return;
+    _lang = next;
     analytics.lang = _lang;
     notifyListeners();
+    catalog.reloadForLang();
+    products.refresh();
+    products.loadFacet();
   }
 
   void setDeviceClass(double shortestWidth) {

@@ -8,6 +8,7 @@ import 'screens/me_screen.dart';
 import 'screens/product_detail_screen.dart';
 import 'screens/seller_screen.dart';
 import 'state/app_state.dart';
+import 'widgets/category_sheet.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -64,8 +65,9 @@ class _BootState extends State<_Boot> {
   }
 }
 
-/// 两 tab 壳：浏览与个人页。返回按钮的原生等价物就是导航栈本身——
-/// 栈里有站内上一页就弹栈；没有就落回集市首页（§8.6）。不要为「记住筛选」伪造历史。
+/// 壳层：集市 / 分类（底部中间凸起按钮）/ 我的。
+/// 返回按钮的原生等价物就是导航栈本身——栈里有站内上一页就弹栈；
+/// 没有就落回集市（§8.6）。不要为「记住筛选」伪造历史。
 class RootShell extends StatefulWidget {
   const RootShell({super.key});
 
@@ -75,6 +77,13 @@ class RootShell extends StatefulWidget {
 
 class _RootShellState extends State<RootShell> {
   int _index = 0;
+
+  Future<void> _openCategories() async {
+    final app = context.read<AppState>();
+    final applied = await showCategorySheet(context);
+    if (applied) setState(() => _index = 0);
+    if (mounted) app.analytics.flush();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -94,19 +103,159 @@ class _RootShellState extends State<RootShell> {
                   builder: (_) => _StackEntry(entry: _DeepLink.fromUri(settings.name)),
                 ),
               ),
+              // 中间键不开独立页：它弹出类目面板，选择后回到集市那一屏。
+              const SizedBox.shrink(),
               const MeScreen(),
             ],
           ),
-          bottomNavigationBar: NavigationBar(
-            selectedIndex: _index,
-            onDestinationSelected: (i) => setState(() => _index = i),
-            destinations: [
-              NavigationDestination(icon: const Icon(Icons.storefront_outlined), selectedIcon: const Icon(Icons.storefront), label: l.raw('tab_market')),
-              NavigationDestination(icon: const Icon(Icons.person_outline), selectedIcon: const Icon(Icons.person), label: l.raw('tab_me')),
-            ],
+          bottomNavigationBar: _CenterCategoryBar(
+            index: _index,
+            categoryActive: app.products.category != null,
+            marketLabel: l.raw('tab_market'),
+            categoriesLabel: l.raw('tab_categories'),
+            meLabel: l.raw('tab_me'),
+            onTapMarket: () => setState(() => _index = 0),
+            onTapCategories: _openCategories,
+            onTapMe: () => setState(() => _index = 2),
           ),
         );
       },
+    );
+  }
+}
+
+/// 三键底栏，中间是凸起的圆形「分类」按钮（微信小店式）。
+class _CenterCategoryBar extends StatelessWidget {
+  const _CenterCategoryBar({
+    required this.index,
+    required this.categoryActive,
+    required this.marketLabel,
+    required this.categoriesLabel,
+    required this.meLabel,
+    required this.onTapMarket,
+    required this.onTapCategories,
+    required this.onTapMe,
+  });
+
+  final int index;
+  final bool categoryActive;
+  final String marketLabel;
+  final String categoriesLabel;
+  final String meLabel;
+  final VoidCallback onTapMarket;
+  final VoidCallback onTapCategories;
+  final VoidCallback onTapMe;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 64,
+      decoration: const BoxDecoration(
+        color: MarketTokens.surface,
+        border: Border(top: BorderSide(color: MarketTokens.line)),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Row(
+          children: [
+            Expanded(
+              child: _SideItem(
+                icon: index == 0 ? Icons.storefront : Icons.storefront_outlined,
+                label: marketLabel,
+                active: index == 0,
+                onTap: onTapMarket,
+              ),
+            ),
+            SizedBox(
+              width: 88,
+              child: Stack(
+                clipBehavior: Clip.none,
+                alignment: Alignment.center,
+                children: [
+                  Positioned(
+                    top: -18,
+                    child: GestureDetector(
+                      onTap: onTapCategories,
+                      behavior: HitTestBehavior.opaque,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            width: 52,
+                            height: 52,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              gradient: const LinearGradient(
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                                colors: [Color(0xFFFF7A5C), MarketTokens.primary],
+                              ),
+                              boxShadow: [
+                                BoxShadow(color: MarketTokens.primary.withValues(alpha: 0.35), blurRadius: 12, offset: const Offset(0, 4)),
+                              ],
+                            ),
+                            child: const Icon(Icons.grid_view_rounded, color: Colors.white, size: 26),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            categoriesLabel,
+                            style: TextStyle(
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w700,
+                              color: categoryActive ? MarketTokens.primary : MarketTokens.muted,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  if (categoryActive)
+                    Positioned(
+                      top: -22,
+                      right: 8,
+                      child: Container(
+                        width: 10,
+                        height: 10,
+                        decoration: BoxDecoration(color: MarketTokens.success, shape: BoxShape.circle, border: Border.all(color: MarketTokens.surface, width: 2)),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: _SideItem(
+                icon: index == 2 ? Icons.person : Icons.person_outline,
+                label: meLabel,
+                active: index == 2,
+                onTap: onTapMe,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SideItem extends StatelessWidget {
+  const _SideItem({required this.icon, required this.label, required this.active, required this.onTap});
+  final IconData icon;
+  final String label;
+  final bool active;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, size: 24, color: active ? MarketTokens.primary : MarketTokens.muted),
+          const SizedBox(height: 3),
+          Text(label, style: TextStyle(fontSize: 11, fontWeight: active ? FontWeight.w700 : FontWeight.w500, color: active ? MarketTokens.primary : MarketTokens.muted)),
+        ],
+      ),
     );
   }
 }

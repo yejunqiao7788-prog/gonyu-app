@@ -6,6 +6,7 @@ import '../core/api_exception.dart';
 import '../data/market_api.dart';
 import '../data/models.dart';
 import 'app_state.dart';
+import 'catalog_controller.dart';
 
 /// 首页/列表的查询状态机。三条不能写错的（§5.2、§6.1、§6.10）：
 /// - 采纳服务端回显的 page / sort（越界回落第 1 页，不采纳就是「第 8 页显示第 1 页内容」）。
@@ -33,6 +34,8 @@ class ProductsController extends ChangeNotifier {
   String? listedDay; // yyyy-MM-dd（Europe/Kyiv 的日子由服务端裁定）
 
   static const List<String> sortOptions = ['recommended', 'newest', 'price_asc', 'price_desc', 'stock'];
+
+  static String sortKeyFor(int i) => const ['sort_recommended', 'sort_newest', 'sort_price_asc', 'sort_price_desc', 'sort_stock'][i];
 
   double? get minPrice => double.tryParse(minPriceRaw ?? '');
   double? get maxPrice => double.tryParse(maxPriceRaw ?? '');
@@ -125,6 +128,15 @@ class ProductsController extends ChangeNotifier {
       query: q,
       source: seller != null ? 'seller' : (q != null ? 'search' : (category != null ? 'category' : 'home')),
     ));
+  }
+
+  /// chip 回显用类目名（名字来自服务端折好的那份 catalog，不自己拼）。
+  String categoryName(CatalogController catalog) {
+    final slug = category;
+    if (slug == null) return '';
+    final all = catalog.catalog?.categories ?? const [];
+    final match = all.where((n) => n.slug == slug).toList();
+    return match.isEmpty ? slug : match.first.name;
   }
 
   MarketQuery _buildQuery({int? page}) => MarketQuery(
@@ -242,47 +254,4 @@ class ProductsController extends ChangeNotifier {
     _priceDebounce?.cancel();
     super.dispose();
   }
-}
-
-/// 类目树：整个公域首页只取一次（导航、页脚、筛选 chips 共用一份真值，§6.1）。
-class CatalogController extends ChangeNotifier {
-  CatalogController(this._app) {
-    load();
-  }
-
-  final AppState _app;
-  MarketCatalog? catalog;
-  bool loading = true;
-  bool failed = false;
-
-  Future<void> load() async {
-    loading = true;
-    notifyListeners();
-    try {
-      catalog = await _app.marketApi.getCatalog(_app.lang);
-      failed = false;
-    } catch (_) {
-      failed = true; // 读失败 ≠ 「平台没有类目」
-    } finally {
-      loading = false;
-      notifyListeners();
-    }
-  }
-
-  /// 语言变了必须重取：name 是服务端按 lang 折好的单字段。
-  Future<void> reloadForLang() async {
-    catalog = null;
-    await load();
-  }
-
-  List<MarketCatalogNode> get rootCategories {
-    final c = catalog;
-    if (c == null) return const [];
-    final roots = c.categories.where((n) => n.parentId == null).toList();
-    roots.sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
-    return roots;
-  }
-
-  /// 补救类目条只给 listing_count > 0 的根类目——把空类目做成出口是最坏的空状态。
-  List<MarketCatalogNode> get salvageRootsWithSupply => rootCategories.where((n) => n.listingCount > 0).toList();
 }

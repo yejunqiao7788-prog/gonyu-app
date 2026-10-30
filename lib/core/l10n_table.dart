@@ -7,6 +7,7 @@ const Map<String, List<String>> kMarketStrings = {
   // ---- 导航与通用 ----
   'app_name': ['TorgSeek', 'TorgSeek', 'TorgSeek', 'TorgSeek'],
   'tab_market': ['Ринок', 'Market', '集市', 'Chợ'],
+  'tab_categories': ['Категорії', 'Categories', '分类', 'Danh mục'],
   'tab_me': ['Мій кабінет', 'My page', '个人页', 'Của tôi'],
   'loading': ['Завантаження…', 'Loading…', '加载中…', 'Đang tải…'],
   'retry': ['Повторити', 'Retry', '重试', 'Thử lại'],
@@ -37,6 +38,7 @@ const Map<String, List<String>> kMarketStrings = {
   'lead_time': ['Доставка {n} дн.', 'Lead time {n} d', '交付 {n} 天', 'Giao {n} ngày'],
   'lead_time_unmarked': ['Доставка: не вказано', 'Lead time: not stated', '交付周期未标注', 'Thời gian giao: chưa ghi'],
   'filter_title': ['Фільтри', 'Filters', '筛选', 'Bộ lọc'],
+  'sort': ['Сортування', 'Sort', '排序', 'Sắp xếp'],
   'settings': ['Налаштування', 'Settings', '设置', 'Cài đặt'],
   'filter_price': ['Ціна', 'Price', '价格', 'Giá'],
   'filter_price_min': ['Від', 'Min', '最低', 'Từ'],
