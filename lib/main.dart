@@ -124,7 +124,8 @@ class _RootShellState extends State<RootShell> {
   }
 }
 
-/// 三键底栏，中间是凸起的圆形「分类」按钮（微信小店式）。
+/// 三键底栏：顶边挖半圆凹槽，中间「分类」圆钮沉进槽里（微信小店式）。
+/// 凹槽与圆钮共用一套几何参数，改一处即可整体跟随（见 _BarGeometry）。
 class _CenterCategoryBar extends StatelessWidget {
   const _CenterCategoryBar({
     required this.index,
@@ -146,95 +147,177 @@ class _CenterCategoryBar extends StatelessWidget {
   final VoidCallback onTapCategories;
   final VoidCallback onTapMe;
 
+  // 圆钮直径。凹槽 = 直径 + 一圈缝，圆钮 = 大部分沉在槽内、少量上浮。
+  static const double _fabDiameter = 54;
+
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 64,
-      decoration: const BoxDecoration(
-        color: MarketTokens.surface,
-        border: Border(top: BorderSide(color: MarketTokens.line)),
-      ),
-      child: SafeArea(
-        top: false,
-        child: Row(
-          children: [
-            Expanded(
-              child: _SideItem(
-                icon: index == 0 ? Icons.storefront : Icons.storefront_outlined,
-                label: marketLabel,
-                active: index == 0,
-                onTap: onTapMarket,
+    final overhang = _BarGeometry.overhang; // 槽上方留给圆钮上浮的空间
+    final barHeight = _BarGeometry.barHeight;
+    final safeBottom = MediaQuery.viewPaddingOf(context).bottom;
+    return SizedBox(
+      height: overhang + barHeight + safeBottom,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final cx = constraints.maxWidth / 2;
+          final fabCenter = _BarGeometry.fabCenterY(overhang);
+          return Stack(
+            clipBehavior: Clip.none,
+            children: [
+              // 1) 带凹槽的栏体（顶边在 overhang 处）。
+              Positioned(
+                top: overhang,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: CustomPaint(
+                  painter: _NotchedBarPainter(cx: cx),
+                  size: Size(constraints.maxWidth, barHeight + safeBottom),
+                ),
               ),
-            ),
-            SizedBox(
-              width: 88,
-              child: Stack(
-                clipBehavior: Clip.none,
-                alignment: Alignment.center,
-                children: [
-                  Positioned(
-                    top: -18,
-                    child: GestureDetector(
-                      onTap: onTapCategories,
-                      behavior: HitTestBehavior.opaque,
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Container(
-                            width: 52,
-                            height: 52,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              gradient: const LinearGradient(
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                                colors: [Color(0xFFFF7A5C), MarketTokens.primary],
-                              ),
-                              boxShadow: [
-                                BoxShadow(color: MarketTokens.primary.withValues(alpha: 0.35), blurRadius: 12, offset: const Offset(0, 4)),
-                              ],
-                            ),
-                            child: const Icon(Icons.grid_view_rounded, color: Colors.white, size: 26),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            categoriesLabel,
-                            style: TextStyle(
-                              fontSize: 10.5,
-                              fontWeight: FontWeight.w700,
-                              color: categoryActive ? MarketTokens.primary : MarketTokens.muted,
-                            ),
-                          ),
+              // 2) 左右两个入口 + 中间留给圆钮的空位。
+              Positioned(
+                top: overhang,
+                left: 0,
+                right: 0,
+                height: barHeight,
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: _SideItem(
+                        icon: index == 0 ? Icons.storefront : Icons.storefront_outlined,
+                        label: marketLabel,
+                        active: index == 0,
+                        onTap: onTapMarket,
+                      ),
+                    ),
+                    const SizedBox(width: 96), // 中间空位 = 凹槽宽度
+                    Expanded(
+                      child: _SideItem(
+                        icon: index == 2 ? Icons.person : Icons.person_outline,
+                        label: meLabel,
+                        active: index == 2,
+                        onTap: onTapMe,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              // 3) 圆钮本体（带一圈柔光阴影，压在凹槽上）。
+              Positioned(
+                left: cx - _fabDiameter / 2,
+                top: fabCenter - _fabDiameter / 2,
+                child: GestureDetector(
+                  onTap: onTapCategories,
+                  behavior: HitTestBehavior.opaque,
+                  child: AnimatedScale(
+                    scale: categoryActive ? 1.04 : 1.0,
+                    duration: const Duration(milliseconds: 160),
+                    child: Container(
+                      width: _fabDiameter,
+                      height: _fabDiameter,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: const LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [Color(0xFFFF7A5C), MarketTokens.primary],
+                        ),
+                        boxShadow: [
+                          BoxShadow(color: MarketTokens.primary.withValues(alpha: 0.30), blurRadius: 14, spreadRadius: 1, offset: const Offset(0, 5)),
+                          BoxShadow(color: MarketTokens.surface.withValues(alpha: 1), blurRadius: 0, spreadRadius: 3), // 与凹槽之间的一圈白缝
                         ],
                       ),
+                      child: const Icon(Icons.grid_view_rounded, color: Colors.white, size: 27),
                     ),
                   ),
-                  if (categoryActive)
-                    Positioned(
-                      top: -22,
-                      right: 8,
-                      child: Container(
-                        width: 10,
-                        height: 10,
-                        decoration: BoxDecoration(color: MarketTokens.success, shape: BoxShape.circle, border: Border.all(color: MarketTokens.surface, width: 2)),
-                      ),
+                ),
+              ),
+              // 4) 选中类目时右上角一枚小绿点。
+              if (categoryActive)
+                Positioned(
+                  left: cx + _fabDiameter / 2 - 12,
+                  top: fabCenter - _fabDiameter / 2 - 2,
+                  child: Container(
+                    width: 12,
+                    height: 12,
+                    decoration: BoxDecoration(color: MarketTokens.success, shape: BoxShape.circle, border: Border.all(color: MarketTokens.surface, width: 2)),
+                  ),
+                ),
+              // 5) 「分类」标签：贴在圆钮正下方、栏体内。
+              Positioned(
+                left: cx - 48,
+                right: cx - 48,
+                top: fabCenter + _fabDiameter / 2 + 3,
+                child: IgnorePointer(
+                  child: Text(
+                    categoriesLabel,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w700,
+                      color: categoryActive ? MarketTokens.primary : MarketTokens.muted,
                     ),
-                ],
+                  ),
+                ),
               ),
-            ),
-            Expanded(
-              child: _SideItem(
-                icon: index == 2 ? Icons.person : Icons.person_outline,
-                label: meLabel,
-                active: index == 2,
-                onTap: onTapMe,
-              ),
-            ),
-          ],
-        ),
+            ],
+          );
+        },
       ),
     );
   }
+}
+
+/// 凹槽底栏的几何：一处定义、多处共用，避免圆钮与凹槽错位。
+class _BarGeometry {
+  static const double overhang = 18.0; // 槽上方留给圆钮上浮的高度
+  static const double barHeight = 58.0; // 栏体高度（不含 safeBottom）
+  static const double fabDiameter = 54.0;
+  static const double notchMargin = 6.0; // 圆钮与凹槽之间的缝
+  static const double sink = 12.0; // 圆钮中心相对栏顶下沉量 → 越多越「嵌进槽里」
+
+  static double notchRadius() => fabDiameter / 2 + notchMargin;
+
+  /// 圆钮中心 y（整块 SizedBox 坐标）。栏顶在 overhang，中心再下沉 sink。
+  static double fabCenterY(double overhangPx) => overhangPx + sink;
+}
+
+/// 画带半圆凹槽的底栏体：圆角矩形减去一个开口的圆（Path.combine difference）。
+class _NotchedBarPainter extends CustomPainter {
+  _NotchedBarPainter({required this.cx});
+  final double cx;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final r = _BarGeometry.notchRadius();
+    // 圆槽中心在栏体顶边（y=0），故槽口向上开口、向内凹 r。
+    final bar = Path()
+      ..addRRect(RRect.fromRectAndCorners(
+        Rect.fromLTWH(0, 0, size.width, size.height),
+      ));
+    final notch = Path()
+      ..addOval(Rect.fromCircle(center: Offset(cx, 0), radius: r));
+    final body = Path.combine(PathOperation.difference, bar, notch);
+
+    // 柔和顶部阴影。
+    canvas.drawShadow(
+      Path.combine(PathOperation.union, bar, notch),
+      Colors.black.withValues(alpha: 0.18),
+      3,
+      false,
+    );
+    canvas.drawPath(body, Paint()..color = MarketTokens.surface);
+    // 描一条上沿细线（含凹槽边缘），让形状更清晰。
+    final border = Paint()
+      ..color = MarketTokens.line
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1;
+    canvas.drawPath(body, border);
+  }
+
+  @override
+  bool shouldRepaint(covariant _NotchedBarPainter oldDelegate) => oldDelegate.cx != cx;
 }
 
 class _SideItem extends StatelessWidget {
