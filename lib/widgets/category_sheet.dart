@@ -6,8 +6,9 @@ import '../data/models.dart';
 import '../state/app_state.dart';
 import '../state/catalog_controller.dart';
 
-/// 底部分类弹层（微信小店式）：点中间按钮升起一层类目面板，
-/// 选完即走——首页顶部不再为类目常驻一行。数字仍全部来自服务端出参（§6.1）。
+/// 底部分类弹层：点一级类目就地展开子分类（手风琴，一次只开一个）。
+/// 数字全部来自服务端出参（RPC 计数 + 父级滚上），App 不数行（§6.1）；
+/// 只把 listing_count > 0 的类目做成出口——空类目出口是最坏的空状态。
 Future<bool> showCategorySheet(BuildContext context) async {
   final app = context.read<AppState>();
   final result = await showModalBottomSheet<_CategoryPick>(
@@ -21,11 +22,7 @@ Future<bool> showCategorySheet(BuildContext context) async {
     ),
   );
   if (result == null) return false;
-  if (result.slug == null) {
-    app.products.setCategory(null);
-  } else {
-    app.products.setCategory(result.slug);
-  }
+  app.products.setCategory(result.slug); // null = 清掉类目收窄
   return true;
 }
 
@@ -34,8 +31,15 @@ class _CategoryPick {
   final String? slug;
 }
 
-class _CategorySheet extends StatelessWidget {
+class _CategorySheet extends StatefulWidget {
   const _CategorySheet();
+
+  @override
+  State<_CategorySheet> createState() => _CategorySheetState();
+}
+
+class _CategorySheetState extends State<_CategorySheet> {
+  String? _expandedRootId;
 
   @override
   Widget build(BuildContext context) {
@@ -43,10 +47,9 @@ class _CategorySheet extends StatelessWidget {
     final l = app.l10n;
     return SafeArea(
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(18, 14, 18, 8),
+        padding: const EdgeInsets.fromLTRB(14, 12, 14, 6),
         child: Column(
           mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
@@ -56,57 +59,51 @@ class _CategorySheet extends StatelessWidget {
                   onPressed: () => Navigator.pop(context, const _CategoryPick(null)),
                   child: Text(l.raw('all_categories')),
                 ),
-                IconButton(
-                  icon: const Icon(Icons.close),
-                  onPressed: () => Navigator.pop(context),
-                ),
+                IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context)),
               ],
             ),
-            Consumer<CatalogController>(
-              builder: (_, c, __) {
-                if (c.loading && c.catalog == null) {
-                  return const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 40),
-                    child: Center(child: CircularProgressIndicator()),
+            SizedBox(
+              height: MediaQuery.of(context).size.height * 0.58,
+              child: Consumer<CatalogController>(
+                builder: (_, c, __) {
+                  if (c.loading && c.catalog == null) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  final withSupply = c.salvageRootsWithSupply;
+                  final roots = withSupply.isEmpty ? c.rootCategories : withSupply;
+                  if (roots.isEmpty) {
+                    // 读失败或没有供给：说「没读到」，不假装「平台没有类目」。
+                    return Center(
+                      child: Text(c.failed ? l.raw('detail_load_failed') : l.raw('empty_hint'), style: Theme.of(context).textTheme.bodyMedium),
+                    );
+                  }
+                  final currentCategory = app.products.category;
+                  // 打开面板时展开当前类目所属的根（没有选中就都不展开）。
+                  String? expanded = _expandedRootId;
+                  if (expanded == null && currentCategory != null) {
+                    final all = c.catalog?.categories ?? const <MarketCatalogNode>[];
+                    final owner = all.where((n) => n.slug == currentCategory).toList();
+                    if (owner.isNotEmpty) {
+                      final root = roots.where((n) => n.id == owner.first.id || _isDescendant(c, owner.first.id, n.id)).toList();
+                      if (root.isNotEmpty) expanded = root.first.id;
+                    }
+                  }
+                  return ListView(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    children: [
+                      for (final n in roots)
+                        _RootRow(
+                          node: n,
+                          expanded: n.id == expanded,
+                          currentCategory: currentCategory,
+                          children: c.childrenOf(n.id).where((k) => k.listingCount > 0).toList(),
+                          onToggle: () => setState(() => _expandedRootId = n.id == _expandedRootId ? null : n.id),
+                          onPick: (slug) => Navigator.pop(context, _CategoryPick(slug)),
+                        ),
+                    ],
                   );
-                }
-                final roots = c.salvageRootsWithSupply;
-                if (roots.isEmpty) {
-                  // 读失败或没有供给：说「没读到」，不假装「平台没有类目」。
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 28),
-                    child: Text(c.failed ? l.raw('detail_load_failed') : l.raw('empty_hint'), style: Theme.of(context).textTheme.bodyMedium),
-                  );
-                }
-                final currentCategory = app.products.category;
-                return Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Flexible(
-                      child: GridView.count(
-                        crossAxisCount: 3,
-                        shrinkWrap: true,
-                        physics: roots.length > 9 ? const AlwaysScrollableScrollPhysics() : const NeverScrollableScrollPhysics(),
-                        mainAxisSpacing: 10,
-                        crossAxisSpacing: 10,
-                        childAspectRatio: 0.92,
-                        children: [
-                          for (int i = 0; i < roots.length; i++)
-                            _CategoryTile(
-                              node: roots[i],
-                              selected: roots[i].slug == currentCategory,
-                              color: _palette[i % _palette.length],
-                              onTap: () => Navigator.pop(context, _CategoryPick(roots[i].slug)),
-                            ),
-                        ],
-                      ),
-                    ),
-                    // 选中/首个根类目的下一级快捷入口：类目是视图不是页面，所以只在本层展开。
-                    _SubRow(nodes: _subOf(context, roots, currentCategory)),
-                  ],
-                );
-              },
+                },
+              ),
             ),
           ],
         ),
@@ -114,96 +111,120 @@ class _CategorySheet extends StatelessWidget {
     );
   }
 
-  List<MarketCatalogNode> _subOf(BuildContext context, List<MarketCatalogNode> roots, String? currentCategory) {
-    final c = context.read<CatalogController>();
-    final matches = roots.where((n) => n.slug == currentCategory).toList();
-    final target = matches.isEmpty ? roots.first : matches.first;
-    return c.childrenOf(target.id).where((n) => n.listingCount > 0).take(8).toList();
+  bool _isDescendant(CatalogController c, String nodeId, String rootId) {
+    var cursor = c.catalog?.categories.where((n) => n.id == nodeId).toList();
+    int guard = 0;
+    while (cursor != null && cursor.isNotEmpty && guard++ < 10) {
+      final parent = cursor.first.parentId;
+      if (parent == rootId) return true;
+      cursor = c.catalog?.categories.where((n) => n.id == parent).toList();
+    }
+    return false;
   }
 }
 
-class _SubRow extends StatelessWidget {
-  const _SubRow({required this.nodes});
-  final List<MarketCatalogNode> nodes;
+class _RootRow extends StatelessWidget {
+  const _RootRow({
+    required this.node,
+    required this.expanded,
+    required this.currentCategory,
+    required this.children,
+    required this.onToggle,
+    required this.onPick,
+  });
+
+  final MarketCatalogNode node;
+  final bool expanded;
+  final String? currentCategory;
+  final List<MarketCatalogNode> children;
+  final VoidCallback onToggle;
+  final ValueChanged<String> onPick;
 
   @override
   Widget build(BuildContext context) {
-    if (nodes.isEmpty) return const SizedBox.shrink();
-    final app = context.read<AppState>();
-    return Padding(
-      padding: const EdgeInsets.only(top: 12),
-      child: SizedBox(
-        height: 34,
-        child: ListView(
-          scrollDirection: Axis.horizontal,
-          children: [
-            for (final n in nodes)
-              Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: ChoiceChip(
-                  label: Text('${n.name} ${n.listingCount}', style: const TextStyle(fontSize: 12)),
-                  visualDensity: VisualDensity.compact,
-                  selected: app.products.category == n.slug,
-                  onSelected: (_) => Navigator.pop(context, _CategoryPick(n.slug)),
+    final rootSelected = currentCategory == node.slug;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        InkWell(
+          onTap: onToggle, // 点击一级 = 展开/收起子分类
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 13),
+            decoration: BoxDecoration(
+              border: Border(bottom: BorderSide(color: MarketTokens.line.withValues(alpha: 0.5))),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    node.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 14.5,
+                      fontWeight: rootSelected ? FontWeight.w800 : FontWeight.w600,
+                      color: rootSelected ? MarketTokens.primary : MarketTokens.ink,
+                    ),
+                  ),
                 ),
-              ),
-          ],
+                Text('${node.listingCount}', style: const TextStyle(fontSize: 12, color: MarketTokens.muted)),
+                const SizedBox(width: 8),
+                AnimatedRotation(
+                  turns: expanded ? 0.5 : 0,
+                  duration: const Duration(milliseconds: 160),
+                  child: const Icon(Icons.keyboard_arrow_down, size: 22, color: MarketTokens.muted),
+                ),
+              ],
+            ),
+          ),
         ),
-      ),
+        AnimatedSize(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOut,
+          child: expanded
+              ? Padding(
+                  padding: const EdgeInsets.fromLTRB(8, 8, 8, 12),
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      // 展开后第一枚永远是「全部 x」：整棵子树一起看的那一档。
+                      _SubChip(label: '${node.name} · ${node.listingCount}', selected: rootSelected, onTap: () => onPick(node.slug)),
+                      for (final k in children)
+                        _SubChip(label: '${k.name} ${k.listingCount}', selected: currentCategory == k.slug, onTap: () => onPick(k.slug)),
+                    ],
+                  ),
+                )
+              : const SizedBox(width: double.infinity),
+        ),
+      ],
     );
   }
 }
 
-class _CategoryTile extends StatelessWidget {
-  const _CategoryTile({required this.node, required this.color, required this.selected, required this.onTap});
-  final MarketCatalogNode node;
-  final Color color;
+class _SubChip extends StatelessWidget {
+  const _SubChip({required this.label, required this.selected, required this.onTap});
+  final String label;
   final bool selected;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     return InkWell(
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(10),
       onTap: onTap,
       child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(14),
           color: selected ? const Color(0xFFFFE4DB) : MarketTokens.background,
-          border: Border.all(color: selected ? MarketTokens.primary : MarketTokens.line.withValues(alpha: 0.6)),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: selected ? MarketTokens.primary : MarketTokens.line),
         ),
-        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(color: color.withValues(alpha: 0.16), shape: BoxShape.circle),
-              child: Center(
-                child: Text(
-                  (node.name.isEmpty ? '·' : node.name[0]).toUpperCase(),
-                  style: TextStyle(color: color, fontSize: 19, fontWeight: FontWeight.w800),
-                ),
-              ),
-            ),
-            const SizedBox(height: 7),
-            Text(node.name, maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center, style: TextStyle(fontSize: 12.5, fontWeight: selected ? FontWeight.w700 : FontWeight.w600, color: selected ? MarketTokens.primary : MarketTokens.ink)),
-            Text('${node.listingCount}', style: const TextStyle(fontSize: 11, color: MarketTokens.muted)),
-          ],
+        child: Text(
+          label,
+          style: TextStyle(fontSize: 12.5, fontWeight: selected ? FontWeight.w700 : FontWeight.w500, color: selected ? MarketTokens.primary : MarketTokens.ink),
         ),
       ),
     );
   }
 }
-
-const List<Color> _palette = [
-  Color(0xFFFF5A3C),
-  Color(0xFF2E7DD1),
-  Color(0xFF1B7F4B),
-  Color(0xFFB4690E),
-  Color(0xFF8E44AD),
-  Color(0xFFC2185B),
-  Color(0xFF00897B),
-  Color(0xFF5C6BC0),
-];
