@@ -38,14 +38,21 @@ class HomeScreenState extends State<HomeScreen> {
     super.initState();
     _app = context.read<AppState>();
     if (widget.initialSeller != null) _products.seller = widget.initialSeller;
+    _search.addListener(_onSearchTextChanged);
     _scroll.addListener(_onScroll);
+  }
+
+  void _onSearchTextChanged() {
+    if (mounted) setState(() {}); // 让胶囊内的「×」随输入实时出现/消失
   }
 
   @override
   void dispose() {
     _searchDebounce?.cancel();
     _scroll.dispose();
-    _search.dispose();
+    _search
+      ..removeListener(_onSearchTextChanged)
+      ..dispose();
     super.dispose();
   }
 
@@ -95,62 +102,67 @@ class HomeScreenState extends State<HomeScreen> {
 
   Widget _topBar() {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 10, 6, 4),
-      child: Row(
-        children: [
-          Expanded(
-            child: Container(
-              height: 42,
-              decoration: BoxDecoration(color: MarketTokens.surface, borderRadius: BorderRadius.circular(21), border: Border.all(color: MarketTokens.line)),
-              child: Row(
-                children: [
-                  const SizedBox(width: 14),
-                  const Icon(Icons.search, size: 19, color: MarketTokens.muted),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: TextField(
-                      controller: _search,
-                      textInputAction: TextInputAction.search,
-                      onChanged: _onSearchChanged,
-                      onSubmitted: (v) {
-                        _searchDebounce?.cancel();
-                        _products.setSearch(v);
-                      },
-                      style: const TextStyle(fontSize: 14),
-                      decoration: InputDecoration(
-                        hintText: _l.raw('search_placeholder'),
-                        hintStyle: const TextStyle(fontSize: 14, color: MarketTokens.muted),
-                        isDense: true,
-                        border: InputBorder.none,
-                        contentPadding: const EdgeInsets.symmetric(vertical: 10),
-                        suffixIcon: Consumer<ProductsController>(
-                          builder: (_, p, __) => (p.q == null && _search.text.isEmpty)
-                              ? const SizedBox.shrink()
-                              : IconButton(
-                                  icon: const Icon(Icons.close, size: 16),
-                                  onPressed: () {
-                                    _search.clear();
-                                    _products.setSearch('');
-                                  },
-                                ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 4),
+      child: Container(
+        height: 42,
+        decoration: BoxDecoration(color: MarketTokens.surface, borderRadius: BorderRadius.circular(21), border: Border.all(color: MarketTokens.line)),
+        child: Row(
+          children: [
+            const SizedBox(width: 14),
+            const Icon(Icons.search, size: 19, color: MarketTokens.muted),
+            const SizedBox(width: 6),
+            Expanded(
+              child: TextField(
+                controller: _search,
+                textInputAction: TextInputAction.search,
+                onChanged: _onSearchChanged,
+                onSubmitted: (v) {
+                  _searchDebounce?.cancel();
+                  _products.setSearch(v);
+                },
+                style: const TextStyle(fontSize: 14),
+                decoration: InputDecoration(
+                  hintText: _l.raw('search_placeholder'),
+                  hintStyle: const TextStyle(fontSize: 14, color: MarketTokens.muted),
+                  isDense: true,
+                  border: InputBorder.none,
+                  contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                ),
               ),
             ),
-          ),
-          Consumer<ProductsController>(
-            builder: (_, p, __) => IconButton(
-              icon: Icon(Icons.tune, color: _filtersActive(p) ? MarketTokens.primary : MarketTokens.ink),
-              onPressed: () async {
-                // 关掉移动筛选抽屉本身就是一次卸载：卸载时冲刷待提交的价格（§6.10）。
-                await showFilterSheet(context, _products);
+            // 尾部动作组都在搜索胶囊内右侧：清除「×」— 分隔线 — 筛选漏斗。
+            Consumer<ProductsController>(
+              builder: (_, p, __) {
+                final showClear = p.q != null || _search.text.isNotEmpty;
+                return Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (showClear)
+                      _PillAction(
+                        icon: Icons.close,
+                        size: 16,
+                        onTap: () {
+                          _search.clear();
+                          _products.setSearch('');
+                        },
+                      ),
+                    Container(width: 1, height: 18, color: MarketTokens.line),
+                    _PillAction(
+                      icon: Icons.tune,
+                      size: 20,
+                      active: _filtersActive(p),
+                      onTap: () async {
+                        // 关掉移动筛选抽屉本身就是一次卸载：卸载时冲刷待提交的价格（§6.10）。
+                        await showFilterSheet(context, _products);
+                      },
+                    ),
+                    const SizedBox(width: 4),
+                  ],
+                );
               },
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -294,6 +306,27 @@ class HomeScreenState extends State<HomeScreen> {
             FilledButton(onPressed: () => p.refresh(), child: Text(_l.raw('retry'))),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// 搜索胶囊内部右侧的动作图标（与前置放大镜同一高度，不再单独占一列）。
+class _PillAction extends StatelessWidget {
+  const _PillAction({required this.icon, required this.onTap, this.size = 20, this.active = false});
+  final IconData icon;
+  final VoidCallback onTap;
+  final double size;
+  final bool active;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(20),
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+        child: Icon(icon, size: size, color: active ? MarketTokens.primary : MarketTokens.ink),
       ),
     );
   }
