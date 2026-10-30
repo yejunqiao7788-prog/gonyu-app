@@ -157,7 +157,7 @@ class _Cover extends StatelessWidget {
     final app = context.read<AppState>();
     final url = card.imageUrl;
     return AspectRatio(
-      aspectRatio: 1.0,
+      aspectRatio: 0.8, // 4:5 竖图（业主 2026-10-31 决定，贴微信小店竖卡）
       child: Container(
         color: MarketTokens.surfaceDim,
         child: Stack(
@@ -233,5 +233,5 @@ class _FavoriteButton extends StatelessWidget {
   }
 }
 
-/// 双列网格的纵高：封面 1:1 + 文字区 84。宽度由调用方 LayoutBuilder 给出。
-double gridMainAxisExtent(double crossColumnWidth) => crossColumnWidth + 84;
+/// 双列网格的纵高：封面 4:5 + 文字区 84。宽度由调用方 LayoutBuilder 给出。
+double gridMainAxisExtent(double crossColumnWidth) => crossColumnWidth * 1.25 + 84;

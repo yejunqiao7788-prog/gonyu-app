@@ -189,7 +189,7 @@ class HomeScreenState extends State<HomeScreen> {
   Widget _body() {
     return Consumer2<ProductsController, CatalogController>(
       builder: (context, p, c, _) {
-        if (p.loading && p.items.isEmpty) return const SkeletonGrid(crossAxisCount: 2, itemHeight: 280);
+        if (p.loading && p.items.isEmpty) return const SkeletonGrid(crossAxisCount: 2, itemHeight: 300);
         if (p.error != null && p.items.isEmpty) return _loadFailed(p);
 
         final source = p.seller != null ? 'seller' : (p.q != null ? 'search' : (p.category != null ? 'category' : 'home'));
