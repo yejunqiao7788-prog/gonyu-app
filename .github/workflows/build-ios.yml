@@ -1,0 +1,60 @@
+name: Build iOS Release (unsigned)
+
+# iOS 只能在 macOS 上编：Xcode 工具链没有 Linux/Windows 版，所以这条作业单独占一个
+# macos runner。仓库构建形状与库存端一致（同一个模板，只换产物名与包名）。
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'lib/**'
+      - 'assets/**'
+      - 'ios/**'
+      - 'pubspec.yaml'
+      - '.github/workflows/build-ios.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-ios-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    # 钉 macos-15：shared_preferences_foundation 的 pigeon 生成码需要 Swift 6.1。
+    runs-on: macos-15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Show toolchain
+        run: |
+          flutter --version
+          xcodebuild -version
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Build iOS release (unsigned)
+        # CI 手里没有 Apple 证书：产物证明「这套代码编得过 iOS」，不是能装进手机的包。
+        run: flutter build ios --release --no-codesign
+
+      - name: Package .app
+        run: |
+          cd build/ios/iphoneos
+          ditto -c -k --sequesterRsrc Runner.app torgseek-market-ios-unsigned.zip
+
+      - name: Upload unsigned .app
+        uses: actions/upload-artifact@v4
+        with:
+          name: torgseek-market-ios-unsigned
+          path: build/ios/iphoneos/torgseek-market-ios-unsigned.zip
