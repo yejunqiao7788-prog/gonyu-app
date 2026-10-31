@@ -124,8 +124,9 @@ class _RootShellState extends State<RootShell> {
   }
 }
 
-/// 三键底栏：顶边挖半圆凹槽，中间「分类」圆钮沉进槽里（微信小店式）。
-/// 凹槽与圆钮共用一套几何参数，改一处即可整体跟随（见 _BarGeometry）。
+/// 三键底栏（移植自库存端 ThumbBar，业主 2026-10-31 指定参照）：
+/// 凹槽用三次贝塞尔平滑曲线画进栏体顶边，「分类」动作键 Column 随 Row 布局自然落进槽里——
+/// 不再是手工 Positioned 对齐两套坐标；选中项在图标下铺一颗浅色胶囊。
 class _CenterCategoryBar extends StatelessWidget {
   const _CenterCategoryBar({
     required this.index,
@@ -147,200 +148,231 @@ class _CenterCategoryBar extends StatelessWidget {
   final VoidCallback onTapCategories;
   final VoidCallback onTapMe;
 
-  // 圆钮直径。凹槽 = 直径 + 一圈缝，圆钮 = 大部分沉在槽内、少量上浮。
-  static const double _fabDiameter = 54;
+  static const double _barHeight = 66;
+  static const double _notch = 30;
 
   @override
   Widget build(BuildContext context) {
-    final overhang = _BarGeometry.overhang; // 槽上方留给圆钮上浮的空间
-    final barHeight = _BarGeometry.barHeight;
-    final safeBottom = MediaQuery.viewPaddingOf(context).bottom;
+    final safeBottom = MediaQuery.paddingOf(context).bottom;
     return SizedBox(
-      height: overhang + barHeight + safeBottom,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final cx = constraints.maxWidth / 2;
-          final fabCenter = _BarGeometry.fabCenterY(overhang);
-          return Stack(
-            clipBehavior: Clip.none,
-            children: [
-              // 1) 带凹槽的栏体（顶边在 overhang 处）。
-              Positioned(
-                top: overhang,
-                left: 0,
-                right: 0,
-                bottom: 0,
-                child: CustomPaint(
-                  painter: _NotchedBarPainter(cx: cx),
-                  size: Size(constraints.maxWidth, barHeight + safeBottom),
-                ),
-              ),
-              // 2) 左右两个入口 + 中间留给圆钮的空位。
-              Positioned(
-                top: overhang,
-                left: 0,
-                right: 0,
-                height: barHeight,
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: _SideItem(
-                        icon: index == 0 ? Icons.storefront : Icons.storefront_outlined,
-                        label: marketLabel,
-                        active: index == 0,
-                        onTap: onTapMarket,
-                      ),
-                    ),
-                    const SizedBox(width: 96), // 中间空位 = 凹槽宽度
-                    Expanded(
-                      child: _SideItem(
-                        icon: index == 2 ? Icons.person : Icons.person_outline,
-                        label: meLabel,
-                        active: index == 2,
-                        onTap: onTapMe,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              // 3) 圆钮本体（带一圈柔光阴影，压在凹槽上）。
-              Positioned(
-                left: cx - _fabDiameter / 2,
-                top: fabCenter - _fabDiameter / 2,
-                child: GestureDetector(
-                  onTap: onTapCategories,
-                  behavior: HitTestBehavior.opaque,
-                  child: AnimatedScale(
-                    scale: categoryActive ? 1.04 : 1.0,
-                    duration: const Duration(milliseconds: 160),
-                    child: Container(
-                      width: _fabDiameter,
-                      height: _fabDiameter,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        gradient: const LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: [Color(0xFFFF7A5C), MarketTokens.primary],
-                        ),
-                        boxShadow: [
-                          BoxShadow(color: MarketTokens.primary.withValues(alpha: 0.30), blurRadius: 14, spreadRadius: 1, offset: const Offset(0, 5)),
-                          BoxShadow(color: MarketTokens.surface.withValues(alpha: 1), blurRadius: 0, spreadRadius: 3), // 与凹槽之间的一圈白缝
-                        ],
-                      ),
-                      child: const Icon(Icons.grid_view_rounded, color: Colors.white, size: 27),
-                    ),
-                  ),
-                ),
-              ),
-              // 4) 选中类目时右上角一枚小绿点。
-              if (categoryActive)
-                Positioned(
-                  left: cx + _fabDiameter / 2 - 12,
-                  top: fabCenter - _fabDiameter / 2 - 2,
-                  child: Container(
-                    width: 12,
-                    height: 12,
-                    decoration: BoxDecoration(color: MarketTokens.success, shape: BoxShape.circle, border: Border.all(color: MarketTokens.surface, width: 2)),
-                  ),
-                ),
-              // 5) 「分类」标签：贴在圆钮正下方、栏体内。
-              Positioned(
-                left: cx - 48,
-                right: cx - 48,
-                top: fabCenter + _fabDiameter / 2 + 3,
-                child: IgnorePointer(
-                  child: Text(
-                    categoriesLabel,
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 10.5,
-                      fontWeight: FontWeight.w700,
-                      color: categoryActive ? MarketTokens.primary : MarketTokens.muted,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          );
-        },
-      ),
-    );
-  }
-}
-
-/// 凹槽底栏的几何：一处定义、多处共用，避免圆钮与凹槽错位。
-class _BarGeometry {
-  static const double overhang = 18.0; // 槽上方留给圆钮上浮的高度
-  static const double barHeight = 58.0; // 栏体高度（不含 safeBottom）
-  static const double fabDiameter = 54.0;
-  static const double notchMargin = 6.0; // 圆钮与凹槽之间的缝
-  static const double sink = 12.0; // 圆钮中心相对栏顶下沉量 → 越多越「嵌进槽里」
-
-  static double notchRadius() => fabDiameter / 2 + notchMargin;
-
-  /// 圆钮中心 y（整块 SizedBox 坐标）。栏顶在 overhang，中心再下沉 sink。
-  static double fabCenterY(double overhangPx) => overhangPx + sink;
-}
-
-/// 画带半圆凹槽的底栏体：圆角矩形减去一个开口的圆（Path.combine difference）。
-class _NotchedBarPainter extends CustomPainter {
-  _NotchedBarPainter({required this.cx});
-  final double cx;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final r = _BarGeometry.notchRadius();
-    // 圆槽中心在栏体顶边（y=0），故槽口向上开口、向内凹 r。
-    final bar = Path()
-      ..addRRect(RRect.fromRectAndCorners(
-        Rect.fromLTWH(0, 0, size.width, size.height),
-      ));
-    final notch = Path()
-      ..addOval(Rect.fromCircle(center: Offset(cx, 0), radius: r));
-    final body = Path.combine(PathOperation.difference, bar, notch);
-
-    // 柔和顶部阴影。
-    canvas.drawShadow(
-      Path.combine(PathOperation.union, bar, notch),
-      Colors.black.withValues(alpha: 0.18),
-      3,
-      false,
-    );
-    canvas.drawPath(body, Paint()..color = MarketTokens.surface);
-    // 描一条上沿细线（含凹槽边缘），让形状更清晰。
-    final border = Paint()
-      ..color = MarketTokens.line
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1;
-    canvas.drawPath(body, border);
-  }
-
-  @override
-  bool shouldRepaint(covariant _NotchedBarPainter oldDelegate) => oldDelegate.cx != cx;
-}
-
-class _SideItem extends StatelessWidget {
-  const _SideItem({required this.icon, required this.label, required this.active, required this.onTap});
-  final IconData icon;
-  final String label;
-  final bool active;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
+      height: _barHeight + _notch + safeBottom,
+      child: Stack(
         children: [
-          Icon(icon, size: 24, color: active ? MarketTokens.primary : MarketTokens.muted),
-          const SizedBox(height: 3),
-          Text(label, style: TextStyle(fontSize: 11, fontWeight: active ? FontWeight.w700 : FontWeight.w500, color: active ? MarketTokens.primary : MarketTokens.muted)),
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: safeBottom,
+            child: CustomPaint(
+              painter: _NotchPainter(surface: MarketTokens.surface),
+              child: const SizedBox(height: _barHeight + _notch, width: double.infinity),
+            ),
+          ),
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: safeBottom + 4,
+            child: Row(
+              children: [
+                Expanded(
+                  child: _TabButton(
+                    icon: Icons.storefront_outlined,
+                    activeIcon: Icons.storefront_rounded,
+                    label: marketLabel,
+                    selected: index == 0,
+                    onTap: onTapMarket,
+                  ),
+                ),
+                _ActionKey(
+                  label: categoriesLabel,
+                  active: categoryActive,
+                  onTap: onTapCategories,
+                ),
+                Expanded(
+                  child: _TabButton(
+                    icon: Icons.person_outline_rounded,
+                    activeIcon: Icons.person_rounded,
+                    label: meLabel,
+                    selected: index == 2,
+                    onTap: onTapMe,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );
   }
+}
+
+class _TabButton extends StatelessWidget {
+  const _TabButton({required this.icon, required this.activeIcon, required this.label, required this.selected, required this.onTap});
+  final IconData icon;
+  final IconData activeIcon;
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = selected ? MarketTokens.primary : MarketTokens.muted;
+    return InkWell(
+      onTap: onTap,
+      child: SizedBox(
+        height: _CenterCategoryBar._barHeight - 8,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 160),
+              padding: EdgeInsets.symmetric(horizontal: selected ? 16 : 12, vertical: 5),
+              decoration: BoxDecoration(
+                // 选中项：图标底铺一颗品牌色浅胶囊（库存端同款形状）。
+                color: selected ? MarketTokens.primary.withValues(alpha: 0.12) : Colors.transparent,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Icon(selected ? activeIcon : icon, size: 22, color: color),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                color: color,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ActionKey extends StatelessWidget {
+  const _ActionKey({required this.label, required this.active, required this.onTap});
+  final String label;
+  final bool active;
+  final VoidCallback onTap;
+
+  static const double _diameter = 52;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 92,
+      child: Column(
+        children: [
+          Material(
+            color: Colors.transparent,
+            shape: const CircleBorder(),
+            clipBehavior: Clip.hardEdge,
+            child: InkWell(
+              onTap: onTap,
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Container(
+                    width: _diameter,
+                    height: _diameter,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: const LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [Color(0xFFFF7A5C), MarketTokens.primary],
+                      ),
+                      boxShadow: [
+                        BoxShadow(color: MarketTokens.primary.withValues(alpha: 0.30), blurRadius: 12, offset: const Offset(0, 4)),
+                      ],
+                    ),
+                    alignment: Alignment.center,
+                    child: Icon(Icons.grid_view_rounded, color: Colors.white, size: active ? 26 : 28),
+                  ),
+                  if (active)
+                    Positioned(
+                      right: 2,
+                      top: 2,
+                      child: Container(
+                        width: 11,
+                        height: 11,
+                        decoration: BoxDecoration(color: MarketTokens.success, shape: BoxShape.circle, border: Border.all(color: MarketTokens.surface, width: 2)),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: active ? MarketTokens.primary : MarketTokens.muted,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 中间挖一个圆凹槽，动作键坐进去，视觉上和导航条一体（库存端 _NotchPainter 同款曲线）。
+class _NotchPainter extends CustomPainter {
+  _NotchPainter({required this.surface});
+
+  final Color surface;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final notchCenterX = size.width / 2;
+    final barTop = _notchDepth;
+    const radius = 30.0;
+
+    final path = Path()
+      ..moveTo(0, barTop)
+      ..lineTo(notchCenterX - radius - 14, barTop)
+      ..cubicTo(
+        notchCenterX - radius + 2,
+        barTop,
+        notchCenterX - radius + 6,
+        barTop + radius * 0.9,
+        notchCenterX,
+        barTop + radius * 0.9,
+      )
+      ..cubicTo(
+        notchCenterX + radius - 6,
+        barTop + radius * 0.9,
+        notchCenterX + radius - 2,
+        barTop,
+        notchCenterX + radius + 14,
+        barTop,
+      )
+      ..lineTo(size.width, barTop)
+      ..lineTo(size.width, size.height)
+      ..lineTo(0, size.height)
+      ..close();
+
+    canvas.drawShadow(path, Colors.black, 3, false);
+    canvas.drawPath(path, Paint()..color = surface);
+    canvas.drawPath(
+      path,
+      Paint()
+        ..color = MarketTokens.line
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1,
+    );
+  }
+
+  static const double _notchDepth = 30;
+
+  @override
+  bool shouldRepaint(_NotchPainter oldDelegate) => oldDelegate.surface != surface;
 }
 
 /// 内层导航：深链（分享/落地承接）直接落在详情页或店铺页时，站内没有上一页——
