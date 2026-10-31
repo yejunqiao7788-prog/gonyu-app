@@ -213,15 +213,18 @@ class _TabButton extends StatelessWidget {
   final bool selected;
   final VoidCallback onTap;
 
+  /// 三格同高；标签全部贴底同一行 → 中间「分类」与两侧文字基线对齐。
+  static const double cellHeight = 58;
+
   @override
   Widget build(BuildContext context) {
     final color = selected ? MarketTokens.primary : MarketTokens.muted;
     return InkWell(
       onTap: onTap,
       child: SizedBox(
-        height: _CenterCategoryBar._barHeight - 8,
+        height: cellHeight,
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisAlignment: MainAxisAlignment.end,
           children: [
             AnimatedContainer(
               duration: const Duration(milliseconds: 160),
@@ -233,13 +236,14 @@ class _TabButton extends StatelessWidget {
               ),
               child: Icon(selected ? activeIcon : icon, size: 22, color: color),
             ),
-            const SizedBox(height: 2),
+            const SizedBox(height: 3),
             Text(
               label,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 fontSize: 11,
+                height: 1.3,
                 fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
                 color: color,
               ),
@@ -263,57 +267,71 @@ class _ActionKey extends StatelessWidget {
   Widget build(BuildContext context) {
     return SizedBox(
       width: 92,
-      child: Column(
+      height: _TabButton.cellHeight,
+      child: Stack(
+        clipBehavior: Clip.none,
         children: [
-          Material(
-            color: Colors.transparent,
-            shape: const CircleBorder(),
-            clipBehavior: Clip.hardEdge,
-            child: InkWell(
-              onTap: onTap,
-              child: Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  Container(
-                    width: _diameter,
-                    height: _diameter,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: const LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [Color(0xFFFF7A5C), MarketTokens.primary],
-                      ),
-                      boxShadow: [
-                        BoxShadow(color: MarketTokens.primary.withValues(alpha: 0.30), blurRadius: 12, offset: const Offset(0, 4)),
-                      ],
-                    ),
-                    alignment: Alignment.center,
-                    child: Icon(Icons.grid_view_rounded, color: Colors.white, size: active ? 26 : 28),
-                  ),
-                  if (active)
-                    Positioned(
-                      right: 2,
-                      top: 2,
-                      child: Container(
-                        width: 11,
-                        height: 11,
-                        decoration: BoxDecoration(color: MarketTokens.success, shape: BoxShape.circle, border: Border.all(color: MarketTokens.surface, width: 2)),
-                      ),
-                    ),
-                ],
+          // 标签与两侧 tab 占同一底部行，字号/字重/颜色档位一致。
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: Text(
+              label,
+              maxLines: 1,
+              textAlign: TextAlign.center,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 11,
+                height: 1.3,
+                fontWeight: FontWeight.w600,
+                color: active ? MarketTokens.primary : MarketTokens.muted,
               ),
             ),
           ),
-          const SizedBox(height: 2),
-          Text(
-            label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              color: active ? MarketTokens.primary : MarketTokens.muted,
+          // 圆钮上浮进凹槽（clip none 允许越过本格顶边）。
+          Positioned(
+            bottom: 20,
+            left: (92 - _diameter) / 2,
+            child: Material(
+              color: Colors.transparent,
+              shape: const CircleBorder(),
+              clipBehavior: Clip.hardEdge,
+              child: InkWell(
+                onTap: onTap,
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    Container(
+                      width: _diameter,
+                      height: _diameter,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: const LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [Color(0xFFFF7A5C), MarketTokens.primary],
+                        ),
+                        boxShadow: [
+                          BoxShadow(color: MarketTokens.primary.withValues(alpha: 0.30), blurRadius: 12, offset: const Offset(0, 4)),
+                        ],
+                      ),
+                      alignment: Alignment.center,
+                      child: Icon(Icons.grid_view_rounded, color: Colors.white, size: active ? 26 : 28),
+                    ),
+                    if (active)
+                      Positioned(
+                        right: 2,
+                        top: 2,
+                        child: Container(
+                          width: 11,
+                          height: 11,
+                          decoration: BoxDecoration(color: MarketTokens.success, shape: BoxShape.circle, border: Border.all(color: MarketTokens.surface, width: 2)),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
             ),
           ),
         ],
