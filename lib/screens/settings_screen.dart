@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../core/api_exception.dart';
+import '../core/env.dart';
 import '../core/theme.dart';
 import '../state/app_state.dart';
 import 'auth_screen.dart';
@@ -149,7 +150,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const SizedBox(height: 20),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Text('${_app.l10n.raw('app_name')} · ${Theme.of(context).platform == TargetPlatform.iOS ? 'iPhone' : 'Android'} v0.1.0', style: Theme.of(context).textTheme.bodySmall?.apply(color: MarketTokens.muted)),
+            child: Text('${Env.appName} · ${Theme.of(context).platform == TargetPlatform.iOS ? 'iPhone' : 'Android'} v${Env.appVersion}', style: Theme.of(context).textTheme.bodySmall?.apply(color: MarketTokens.muted)),
           ),
         ],
       ),

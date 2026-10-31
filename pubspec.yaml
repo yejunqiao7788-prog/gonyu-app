@@ -1,7 +1,7 @@
 name: market_app
 description: "TorgSeek 公域集市买家 App（/api/market/* 客户端，不含任何密钥）"
 publish_to: "none"
-version: 0.1.0+1
+version: 0.1.1+2
 
 environment:
   sdk: ">=3.6.0 <4.0.0"
@@ -24,8 +24,19 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^5.0.0
+  flutter_launcher_icons: ^0.14.2
 
 flutter:
   uses-material-design: true
   assets:
     - assets/brand/
+
+flutter_launcher_icons:
+  android: "ic_launcher"
+  ios: true
+  image_path: "assets/brand/market-512.png"
+  remove_alpha_ios: true
+  # 自适应图标：底用集市 PWA 的奶油底，前景取 maskable 版（logo 已在安全区内，
+  # 不会再被 Android 的 1.5x 放大裁切“顶大发虚”）。
+  adaptive_icon_background: "#FFF7F3"
+  adaptive_icon_foreground: "assets/brand/market-512-maskable.png"

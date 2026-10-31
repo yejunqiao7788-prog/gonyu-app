@@ -221,14 +221,17 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     final urls = d.imageUrls;
     if (urls.isEmpty) {
       // image_count === 0 是诚实的值：整块隐藏或「暂无图片」，不显示空轮播（§10.3 第 4 行）。
-      return Container(
-        height: 220,
-        color: MarketTokens.surfaceDim,
-        child: Center(child: Text(_app.l10n.raw('images_absent'), style: Theme.of(context).textTheme.bodyMedium?.apply(color: MarketTokens.muted))),
+      return AspectRatio(
+        aspectRatio: 0.8,
+        child: Container(
+          color: MarketTokens.surfaceDim,
+          child: Center(child: Text(_app.l10n.raw('images_absent'), style: Theme.of(context).textTheme.bodyMedium?.apply(color: MarketTokens.muted))),
+        ),
       );
     }
-    return SizedBox(
-      height: 260,
+    // 与卡片封面同比例：4:5 竖图（业主 2026-10-31）。
+    return AspectRatio(
+      aspectRatio: 0.8,
       child: PageView.builder(
         itemCount: urls.length,
         itemBuilder: (_, i) => Stack(
