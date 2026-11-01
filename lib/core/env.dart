@@ -14,7 +14,7 @@ class Env {
   );
 
   static const String appName = 'TorgSeek';
-  static const String appVersion = '0.1.1';
+  static const String appVersion = '0.1.2';
 
   /// User-Agent：必须含平台词（android/iphone/ipad），否则归因侧 deviceClassOf() 只能答 null 或 desktop（§8.4）。
   /// 不要伪造完整浏览器 UA。

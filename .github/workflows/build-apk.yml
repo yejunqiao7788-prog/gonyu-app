@@ -44,9 +44,9 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: github.ref == 'refs/heads/main'
         with:
-          tag_name: v0.1.1
-          name: "TorgSeek集市 v0.1.1"
-          body: "公域集市买家 App：修正启动图标（按密度档生成 + 自适应前景安全区）、商品详情图统一 4:5 竖图、底栏平滑凹槽与标签对齐。数据仍全部来自 www.torgseek.com。"
+          tag_name: v0.1.2
+          name: "TorgSeek集市 v0.1.2"
+          body: "公域集市买家 App：商品卡与商品详情显示 SKU（无编码时整行隐藏）。数据仍全部来自 www.torgseek.com。"
           files: build/app/outputs/flutter-apk/app-release.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

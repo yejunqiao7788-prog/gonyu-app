@@ -1,7 +1,7 @@
 name: market_app
 description: "TorgSeek 公域集市买家 App（/api/market/* 客户端，不含任何密钥）"
 publish_to: "none"
-version: 0.1.1+2
+version: 0.1.2+3
 
 environment:
   sdk: ">=3.6.0 <4.0.0"

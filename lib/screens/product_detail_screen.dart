@@ -138,6 +138,12 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
               Text(d.card.title, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800)),
               const SizedBox(height: 8),
               Text(formatPrice(d.card.priceUkr, d.card.currencySymbol), style: Theme.of(context).textTheme.headlineSmall?.copyWith(color: MarketTokens.primary, fontWeight: FontWeight.w800)),
+              // sku 为 null（这一行还没有编码）→ 整行隐藏，不打印空串（§6.2）。
+              if (d.card.sku != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Text('${_app.l10n.raw('detail_sku')}: ${d.card.sku}', style: Theme.of(context).textTheme.bodySmall?.apply(color: MarketTokens.muted)),
+                ),
               const SizedBox(height: 10),
               Wrap(
                 spacing: 10,

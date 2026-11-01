@@ -114,6 +114,17 @@ class _ProductCardState extends State<ProductCard> {
                           ],
                         ),
                         const SizedBox(height: 3),
+                        // sku 有值才出现一行小灰字；null（还没有编码）整行隐藏（§6.2）。
+                        if (c.sku != null)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 2),
+                            child: Text(
+                              'SKU ${c.sku}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontSize: 10.5, color: MarketTokens.muted),
+                            ),
+                          ),
                         // 一行灰字：卖家为主，次要元信息（起订/无货）跟在后面，窄屏截的是这一行（§9.6）。
                         Row(
                           children: [
@@ -233,5 +244,5 @@ class _FavoriteButton extends StatelessWidget {
   }
 }
 
-/// 双列网格的纵高：封面 4:5 + 文字区 84。宽度由调用方 LayoutBuilder 给出。
-double gridMainAxisExtent(double crossColumnWidth) => crossColumnWidth * 1.25 + 84;
+/// 双列网格的纵高：封面 4:5 + 文字区 100（含 SKU 行）。宽度由调用方 LayoutBuilder 给出。
+double gridMainAxisExtent(double crossColumnWidth) => crossColumnWidth * 1.25 + 100;
